@@ -83,6 +83,13 @@ This lets Lexie remember things like "we practised greetings earlier" without ne
 
 To start fresh (clear all stored vectors), delete the `chroma_data/` directory.
 
+## Deployment
+
+To run Lexie on AWS EC2, see the step-by-step guides in [`docs/`](docs/):
+
+- [`ec2-deployment-guide.md`](docs/ec2-deployment-guide.md) — full walkthrough: launch instance, SSH, systemd service, and gotchas
+- [`lexie-installation-guide.pdf`](docs/lexie-installation-guide.pdf) — printable installation reference
+
 ## Tech Stack
 
 | Component | Technology |
