@@ -97,7 +97,7 @@ def chat(request: ChatRequest) -> ChatResponse:
     try:
         reply = bot.chat(
             session_id=request.session_id,
-            message=request.message,
+            user_message=request.message,
         )
         session = bot.session_manager.get_session(request.session_id)
         return ChatResponse(
