@@ -13,6 +13,7 @@ import os
 import uvicorn
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
 
 from app.bot import LanguageTutorBot
 from app.models import (
@@ -35,6 +36,19 @@ app = FastAPI(
         "Start a session, pick your language, and start chatting!"
     ),
     version="1.0.0",
+)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[
+        "http://localhost:3000",
+        "http://localhost:5173",
+        "http://127.0.0.1:3000",
+        "http://127.0.0.1:5173",
+    ],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 # Validate that the API key is present before the server starts accepting traffic.
