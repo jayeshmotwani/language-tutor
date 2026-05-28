@@ -12,9 +12,12 @@ import os
 
 import uvicorn
 from dotenv import load_dotenv
-from fastapi import FastAPI, HTTPException
+from fastapi import Depends, FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 
+from app.auth.dependencies import get_current_user
+from app.auth.models import User  # noqa: F401 — ensures model is registered with Base
+from app.auth.router import router as auth_router
 from app.bot import LanguageTutorBot
 from app.models import (
     ChatRequest,
@@ -48,8 +51,10 @@ app.add_middleware(
     ],
     allow_credentials=True,
     allow_methods=["*"],
-    allow_headers=["*"],
+    allow_headers=["*", "Authorization"],
 )
+
+app.include_router(auth_router)
 
 # Validate that the API key is present before the server starts accepting traffic.
 _api_key = os.getenv("OPENAI_API_KEY")
@@ -73,9 +78,12 @@ def health_check() -> HealthResponse:
 
 
 @app.post("/start-session", response_model=StartSessionResponse, tags=["Session"])
-def start_session(request: StartSessionRequest) -> StartSessionResponse:
+async def start_session(
+    request: StartSessionRequest,
+    _: User = Depends(get_current_user),
+) -> StartSessionResponse:
     """
-    Initialise a new tutoring session.
+    Initialise a new tutoring session. Requires Bearer token.
 
     - **session_id**: a unique string you generate (e.g. a UUID).
     - **target_language**: the language to learn (e.g. "Japanese").
@@ -99,9 +107,12 @@ def start_session(request: StartSessionRequest) -> StartSessionResponse:
 
 
 @app.post("/chat", response_model=ChatResponse, tags=["Chat"])
-def chat(request: ChatRequest) -> ChatResponse:
+async def chat(
+    request: ChatRequest,
+    _: User = Depends(get_current_user),
+) -> ChatResponse:
     """
-    Send a message to Lexie and receive her reply.
+    Send a message to Lexie and receive her reply. Requires Bearer token.
 
     - **session_id**: must match a session created via POST /start-session.
     - **message**: the learner's text input.
