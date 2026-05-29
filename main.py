@@ -9,16 +9,22 @@ Or directly:
 """
 
 import os
+from datetime import datetime
 
 import uvicorn
 from dotenv import load_dotenv
 from fastapi import Depends, FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth.dependencies import get_current_user
 from app.auth.models import User  # noqa: F401 — ensures model is registered with Base
 from app.auth.router import router as auth_router
 from app.bot import LanguageTutorBot
+from app.chat.models import ChatMessage, ChatSession  # noqa: F401 — registers tables with Base
+from app.chat.router import router as chat_router
+from app.database import get_db
 from app.models import (
     ChatRequest,
     ChatResponse,
@@ -55,6 +61,7 @@ app.add_middleware(
 )
 
 app.include_router(auth_router)
+app.include_router(chat_router)
 
 # Validate that the API key is present before the server starts accepting traffic.
 _api_key = os.getenv("OPENAI_API_KEY")
@@ -69,6 +76,18 @@ if not _api_key:
 bot = LanguageTutorBot(openai_api_key=_api_key)
 
 
+# ── Helpers ───────────────────────────────────────────────────────────────────
+
+def _truncate_title(text: str, max_len: int = 60) -> str:
+    """Trim text to at most max_len chars, cutting at the last word boundary."""
+    text = text.strip()
+    if len(text) <= max_len:
+        return text
+    truncated = text[:max_len]
+    last_space = truncated.rfind(" ")
+    return truncated[:last_space] if last_space > 0 else truncated
+
+
 # ── Endpoints ─────────────────────────────────────────────────────────────────
 
 @app.get("/health", response_model=HealthResponse, tags=["Utility"])
@@ -80,7 +99,8 @@ def health_check() -> HealthResponse:
 @app.post("/start-session", response_model=StartSessionResponse, tags=["Session"])
 async def start_session(
     request: StartSessionRequest,
-    _: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
 ) -> StartSessionResponse:
     """
     Initialise a new tutoring session. Requires Bearer token.
@@ -97,19 +117,42 @@ async def start_session(
             target_language=request.target_language,
             user_name=request.user_name,
         )
-        return StartSessionResponse(
-            session_id=request.session_id,
-            message=welcome,
-            language=request.target_language,
-        )
     except Exception as exc:
         raise HTTPException(status_code=500, detail=f"Could not start session: {exc}")
+
+    # Upsert ChatSession row for this session_id + user.
+    result = await db.execute(
+        select(ChatSession).where(ChatSession.id == request.session_id)
+    )
+    chat_session = result.scalar_one_or_none()
+    if chat_session is None:
+        chat_session = ChatSession(
+            id=request.session_id,
+            user_id=current_user.id,
+            language=request.target_language,
+        )
+        db.add(chat_session)
+        await db.flush()
+
+    db.add(ChatMessage(
+        session_id=request.session_id,
+        role="assistant",
+        content=welcome,
+    ))
+    await db.commit()
+
+    return StartSessionResponse(
+        session_id=request.session_id,
+        message=welcome,
+        language=request.target_language,
+    )
 
 
 @app.post("/chat", response_model=ChatResponse, tags=["Chat"])
 async def chat(
     request: ChatRequest,
-    _: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
 ) -> ChatResponse:
     """
     Send a message to Lexie and receive her reply. Requires Bearer token.
@@ -125,16 +168,34 @@ async def chat(
             user_message=request.message,
         )
         session = bot.session_manager.get_session(request.session_id)
-        return ChatResponse(
-            session_id=request.session_id,
-            response=reply,
-            language=session.target_language,
-        )
     except ValueError as exc:
-        # Session not found — 404 is the right status code here.
         raise HTTPException(status_code=404, detail=str(exc))
     except Exception as exc:
         raise HTTPException(status_code=500, detail=f"Chat error: {exc}")
+
+    now = datetime.utcnow()
+
+    # Persist user message and bot reply.
+    db.add(ChatMessage(session_id=request.session_id, role="user", content=request.message))
+    db.add(ChatMessage(session_id=request.session_id, role="assistant", content=reply))
+
+    # Update ChatSession: set title on first user message, bump updated_at.
+    result = await db.execute(
+        select(ChatSession).where(ChatSession.id == request.session_id)
+    )
+    chat_session = result.scalar_one_or_none()
+    if chat_session is not None:
+        if chat_session.title is None:
+            chat_session.title = _truncate_title(request.message)
+        chat_session.updated_at = now
+
+    await db.commit()
+
+    return ChatResponse(
+        session_id=request.session_id,
+        response=reply,
+        language=session.target_language,
+    )
 
 
 # ── Dev server ────────────────────────────────────────────────────────────────
