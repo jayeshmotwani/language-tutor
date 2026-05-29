@@ -8,6 +8,8 @@ A friendly, text-based language tutor chatbot built with **FastAPI**, **GPT-4o-m
 - Introduce yourself to Lexie and tell her which language you want to learn
 - She remembers your conversation within a session and adapts to your level
 - Past exchanges are stored as embeddings in ChromaDB and retrieved as context, so Lexie stays relevant across a long session
+- Persistent chat session storage (MySQL) — sessions and messages survive server restarts
+- Session history API with title auto-generation from the first user message
 - Clean OOP design: `LanguageTutorBot`, `EmbeddingService`, `SessionManager`
 
 ## Project Structure
@@ -22,12 +24,16 @@ language-tutor/
 │   ├── embeddings.py        # EmbeddingService — ChromaDB + OpenAI embeddings
 │   ├── models.py            # Pydantic request/response schemas (tutoring only)
 │   ├── session.py           # SessionManager — in-memory session state
-│   └── auth/
-│       ├── dependencies.py  # get_current_user() FastAPI dependency
-│       ├── models.py        # SQLAlchemy User ORM model
-│       ├── router.py        # /auth endpoints
-│       ├── schemas.py       # Pydantic auth request/response schemas
-│       └── service.py       # Password hashing, JWT logic, DB queries
+│   ├── auth/
+│   │   ├── dependencies.py  # get_current_user() FastAPI dependency
+│   │   ├── models.py        # SQLAlchemy User ORM model
+│   │   ├── router.py        # /auth endpoints
+│   │   ├── schemas.py       # Pydantic auth request/response schemas
+│   │   └── service.py       # Password hashing, JWT logic, DB queries
+│   └── chat/
+│       ├── models.py        # SQLAlchemy ChatSession + ChatMessage ORM models
+│       ├── router.py        # /sessions endpoints
+│       └── schemas.py       # Pydantic chat session/message schemas
 ├── alembic/
 │   ├── env.py               # Async Alembic migration environment
 │   ├── script.py.mako       # Revision template
@@ -35,9 +41,11 @@ language-tutor/
 ├── tests/
 │   ├── conftest.py          # Shared fixtures (in-memory SQLite, mocked bot)
 │   ├── test_auth.py         # Auth endpoint tests
+│   ├── test_chat.py         # Chat session persistence tests
 │   └── test_existing.py     # Tests for /health, /start-session, /chat
 ├── docs/
-│   └── ec2-deployment-guide.md
+│   ├── ec2-deployment-guide.md
+│   └── frontend-integration-guide.md
 ├── alembic.ini
 ├── pytest.ini
 ├── requirements.txt
@@ -68,10 +76,11 @@ See the [Environment Variables](#environment-variables) section for all required
 
 ```bash
 alembic revision --autogenerate -m "create users table"
+alembic revision --autogenerate -m "add chat sessions and messages tables"
 alembic upgrade head
 ```
 
-Requires a running MySQL instance and a valid `DATABASE_URL` in `.env`.
+Requires a running MySQL instance and a valid `DATABASE_URL` in `.env`. The migrations create three tables: `users`, `chat_sessions`, and `chat_messages`.
 
 ### 4. Run the server
 
@@ -107,8 +116,17 @@ uvicorn main:app --reload
 | Method | Path | Description |
 |--------|------|-------------|
 | `GET` | `/health` | Health check — public, no token needed |
-| `POST` | `/start-session` | Open a new tutoring session |
+| `POST` | `/start-session` | Initialise Lexie's in-memory bot state for a session |
 | `POST` | `/chat` | Send a message and get Lexie's reply |
+
+### Chat Sessions (Bearer token required)
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `GET` | `/sessions` | List the user's sessions, newest first (max 50) |
+| `POST` | `/sessions` | Create a new session record; returns `session_id` to pass to `/start-session` |
+| `GET` | `/sessions/{session_id}` | Get session metadata and full message history |
+| `DELETE` | `/sessions/{session_id}` | Hard-delete a session and all its messages |
 
 All protected endpoints expect the header: `Authorization: Bearer <access_token>`
 
@@ -149,9 +167,10 @@ Tests use an in-memory SQLite database and a mocked bot — no MySQL, OpenAI API
 pytest tests/ -v
 ```
 
-16 tests should pass. Run a single file with:
+32 tests should pass. Run a single file with:
 ```bash
 pytest tests/test_auth.py -v
+pytest tests/test_chat.py -v
 pytest tests/test_existing.py -v
 ```
 
@@ -163,11 +182,14 @@ This lets Lexie remember things like "we practised greetings earlier" without ne
 
 To start fresh (clear all stored vectors), delete the `chroma_data/` directory.
 
+## Docs
+
+- [`docs/frontend-integration-guide.md`](docs/frontend-integration-guide.md) — complete guide for frontend developers: auth flow, session lifecycle, all endpoints with request/response schemas, Axios interceptor example, and an end-to-end walkthrough
+- [`docs/ec2-deployment-guide.md`](docs/ec2-deployment-guide.md) — AWS EC2 deployment: launch instance, SSH, systemd service, and gotchas
+
 ## Deployment
 
-To run Lexie on AWS EC2, see the step-by-step guides in [`docs/`](docs/):
-
-- [`ec2-deployment-guide.md`](docs/ec2-deployment-guide.md) — full walkthrough: launch instance, SSH, systemd service, and gotchas
+To run Lexie on AWS EC2, see [`docs/ec2-deployment-guide.md`](docs/ec2-deployment-guide.md).
 
 ## Tech Stack
 

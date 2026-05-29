@@ -1,6 +1,11 @@
 import asyncio
 import os
+import sys
 from logging.config import fileConfig
+
+# Ensure the project root is on sys.path so `app.*` imports resolve when
+# Alembic is invoked from any working directory.
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from alembic import context
 from dotenv import load_dotenv
@@ -13,6 +18,7 @@ load_dotenv()
 # Alembic generates diffs.
 from app.database import Base  # noqa: E402
 import app.auth.models  # noqa: F401, E402
+import app.chat.models  # noqa: F401, E402
 
 config = context.config
 
