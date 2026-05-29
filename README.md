@@ -25,12 +25,14 @@ language-tutor/
 │   ├── models.py            # Pydantic request/response schemas (tutoring only)
 │   ├── session.py           # SessionManager — in-memory session state
 │   ├── auth/
+│   │   ├── __init__.py
 │   │   ├── dependencies.py  # get_current_user() FastAPI dependency
 │   │   ├── models.py        # SQLAlchemy User ORM model
 │   │   ├── router.py        # /auth endpoints
 │   │   ├── schemas.py       # Pydantic auth request/response schemas
 │   │   └── service.py       # Password hashing, JWT logic, DB queries
 │   └── chat/
+│       ├── __init__.py
 │       ├── models.py        # SQLAlchemy ChatSession + ChatMessage ORM models
 │       ├── router.py        # /sessions endpoints
 │       └── schemas.py       # Pydantic chat session/message schemas
@@ -39,6 +41,7 @@ language-tutor/
 │   ├── script.py.mako       # Revision template
 │   └── versions/            # Generated migration scripts
 ├── tests/
+│   ├── __init__.py
 │   ├── conftest.py          # Shared fixtures (in-memory SQLite, mocked bot)
 │   ├── test_auth.py         # Auth endpoint tests
 │   ├── test_chat.py         # Chat session persistence tests
@@ -75,18 +78,22 @@ See the [Environment Variables](#environment-variables) section for all required
 ### 3. Run database migrations
 
 ```bash
-alembic revision --autogenerate -m "create users table"
-alembic revision --autogenerate -m "add chat sessions and messages tables"
+alembic revision --autogenerate -m "initial schema"
 alembic upgrade head
 ```
 
-Requires a running MySQL instance and a valid `DATABASE_URL` in `.env`. The migrations create three tables: `users`, `chat_sessions`, and `chat_messages`.
+Requires a running MySQL instance and a valid `DATABASE_URL` in `.env`. The single autogenerate step detects all models (`users`, `chat_sessions`, `chat_messages`) and creates the migration file; `upgrade head` applies it.
 
 ### 4. Run the server
 
 ```bash
 uvicorn main:app --reload
 # API docs at http://localhost:8000/docs
+```
+
+Or run directly:
+```bash
+python main.py
 ```
 
 ## Environment Variables
@@ -199,7 +206,7 @@ To run Lexie on AWS EC2, see [`docs/ec2-deployment-guide.md`](docs/ec2-deploymen
 | AI model | OpenAI `gpt-4o-mini` |
 | Embeddings | OpenAI `text-embedding-3-small` |
 | Vector database | ChromaDB (local persistent) |
-| Auth | `python-jose` (JWT) + `passlib[bcrypt]` |
+| Auth | `python-jose` (JWT) + `bcrypt` (direct) |
 | Database | MySQL via SQLAlchemy async (`aiomysql`) |
 | Migrations | Alembic |
 | Env management | python-dotenv |
