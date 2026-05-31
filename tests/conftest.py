@@ -9,6 +9,7 @@ DATABASE_URL at import time.
 import os
 
 os.environ.setdefault("OPENAI_API_KEY", "sk-test-fake-key-not-real")
+os.environ.setdefault("DAILY_MESSAGE_LIMIT", "3")
 os.environ.setdefault("JWT_SECRET_KEY", "test-only-secret-key-do-not-use-in-prod!")
 os.environ.setdefault("DATABASE_URL", "sqlite+aiosqlite:///:memory:")
 os.environ.setdefault("ACCESS_TOKEN_EXPIRE_MINUTES", "30")

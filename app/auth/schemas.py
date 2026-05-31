@@ -35,5 +35,8 @@ class UserResponse(BaseModel):
     email: str
     created_at: datetime
     is_active: bool
+    daily_message_count: int = 0
+    daily_message_limit: int = 0
+    messages_remaining: int = 0
 
     model_config = {"from_attributes": True}
