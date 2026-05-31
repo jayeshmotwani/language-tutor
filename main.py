@@ -94,7 +94,7 @@ def _truncate_title(text: str, max_len: int = 60) -> str:
 @app.get("/health", response_model=HealthResponse, tags=["Utility"])
 def health_check() -> HealthResponse:
     """Confirm the service is up and return the bot's name."""
-    return HealthResponse(status="ok", bot_name=LanguageTutorBot.BOT_NAME)
+    return HealthResponse(status="ok", bot_name=LanguageTutorBot.BOT_NAME, auto_deployed="true")
 
 
 @app.post("/start-session", response_model=StartSessionResponse, tags=["Session"])
