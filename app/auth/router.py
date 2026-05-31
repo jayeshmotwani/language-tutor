@@ -70,4 +70,18 @@ async def refresh_token(payload: RefreshTokenRequest, db: AsyncSession = Depends
 
 @router.get("/me", response_model=UserResponse)
 async def get_me(current_user: User = Depends(get_current_user)):
-    return current_user
+    from datetime import date
+    from main import DAILY_MESSAGE_LIMIT
+
+    today = date.today()
+    used = current_user.daily_message_count if current_user.last_message_date == today else 0
+    return UserResponse(
+        id=current_user.id,
+        name=current_user.name,
+        email=current_user.email,
+        created_at=current_user.created_at,
+        is_active=current_user.is_active,
+        daily_message_count=used,
+        daily_message_limit=DAILY_MESSAGE_LIMIT,
+        messages_remaining=max(0, DAILY_MESSAGE_LIMIT - used),
+    )

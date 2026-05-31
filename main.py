@@ -9,7 +9,7 @@ Or directly:
 """
 
 import os
-from datetime import datetime
+from datetime import date, datetime
 
 import uvicorn
 from dotenv import load_dotenv
@@ -75,6 +75,8 @@ if not _api_key:
 # Single bot instance shared across all requests (thread-safe for reads;
 # in-memory session state is sufficient for this POC).
 bot = LanguageTutorBot(openai_api_key=_api_key)
+
+DAILY_MESSAGE_LIMIT = int(os.getenv("DAILY_MESSAGE_LIMIT", "20"))
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
@@ -163,6 +165,24 @@ async def chat(
 
     Returns Lexie's response along with the session ID and active language.
     """
+    today = date.today()
+    if current_user.last_message_date != today:
+        current_user.daily_message_count = 0
+        current_user.last_message_date = today
+    if current_user.daily_message_count >= DAILY_MESSAGE_LIMIT:
+        raise HTTPException(
+            status_code=429,
+            detail={
+                "error": "rate_limit_exceeded",
+                "message": f"Daily message limit of {DAILY_MESSAGE_LIMIT} reached. Resets at midnight UTC.",
+                "limit": DAILY_MESSAGE_LIMIT,
+                "used": current_user.daily_message_count,
+                "resets_at": "midnight UTC",
+            },
+        )
+    current_user.daily_message_count += 1
+    db.add(current_user)
+
     try:
         reply = bot.chat(
             session_id=request.session_id,

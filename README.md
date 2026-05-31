@@ -10,6 +10,7 @@ A friendly, text-based language tutor chatbot built with **FastAPI**, **GPT-4o-m
 - Past exchanges are stored as embeddings in ChromaDB and retrieved as context, so Lexie stays relevant across a long session
 - Persistent chat session storage (MySQL) — sessions and messages survive server restarts
 - Session history API with title auto-generation from the first user message
+- Per-user daily message rate limiting — configurable via `DAILY_MESSAGE_LIMIT` env var, resets at midnight UTC
 - Clean OOP design: `LanguageTutorBot`, `EmbeddingService`, `SessionManager`
 
 ## Project Structure
@@ -106,6 +107,7 @@ python main.py
 | `JWT_ALGORITHM` | No | `HS256` | JWT signing algorithm |
 | `ACCESS_TOKEN_EXPIRE_MINUTES` | No | `30` | Access token lifetime in minutes |
 | `REFRESH_TOKEN_EXPIRE_DAYS` | No | `7` | Refresh token lifetime in days |
+| `DAILY_MESSAGE_LIMIT` | No | `20` | Max `/chat` messages per user per calendar day (UTC). Returns 429 when exceeded. |
 
 ## API Endpoints
 
@@ -124,7 +126,7 @@ python main.py
 |--------|------|-------------|
 | `GET` | `/health` | Health check — public, no token needed |
 | `POST` | `/start-session` | Initialise Lexie's in-memory bot state for a session |
-| `POST` | `/chat` | Send a message and get Lexie's reply |
+| `POST` | `/chat` | Send a message and get Lexie's reply. Returns `429` when daily limit is reached. |
 
 ### Chat Sessions (Bearer token required)
 
@@ -174,7 +176,7 @@ Tests use an in-memory SQLite database and a mocked bot — no MySQL, OpenAI API
 pytest tests/ -v
 ```
 
-32 tests should pass. Run a single file with:
+34 tests should pass. Run a single file with:
 ```bash
 pytest tests/test_auth.py -v
 pytest tests/test_chat.py -v
