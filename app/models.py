@@ -42,3 +42,4 @@ class HealthResponse(BaseModel):
     """Simple health-check payload."""
     status: str
     bot_name: str
+    auto_deployed: str
